@@ -122,4 +122,4 @@ The id of algorithm will be running, which the id is presented as following.
     </table>
 </div>
 
-* We give an example of Email-EuAll in ```./materials/```, and running time of all algorithms in ```./result/EM/```.
+* We give an example of Email-EuAll in ```./materials/```, and running time of all algorithms in ```./result/```.
