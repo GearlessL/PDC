@@ -15,7 +15,7 @@ def shellGetOutput(str1) :
       print(result.stdout.decode())
       appendToFile(result.stdout.decode(), out_filename)
     except subprocess.TimeoutExpired:
-      print("程序运行时间超过指定的时间，已被终止。")
+      print("The program has been running for longer than the specified time and has been terminated.")
   
 
 
@@ -23,7 +23,7 @@ def appendToFile(out, filename):
   with open(filename, "a+") as out_file:
     out_file.writelines(out)
 
-alg_names = ["", "Peeling", "AC", "SC", "PDC", "PDC+", "Fast-PDC"]
+alg_names = ["", "Peeling", "AC", "SC", "ParPeel", "ParPeel+", "Shell-PDC"]
 
 
 files = ["em"];
