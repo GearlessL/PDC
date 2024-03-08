@@ -26,8 +26,6 @@ public:
 
     void SC();
 
-    void ACP();
-
     void ACP_plus();
 
     void Decom();
