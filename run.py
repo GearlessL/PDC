@@ -10,7 +10,8 @@ def shellGetOutput(str1) :
   with lock:
     try:
       result = subprocess.run(str1, stdout=subprocess.PIPE,shell=True, timeout=1e5)
-      # Output results
+      # result = os.system(str1)
+      # 输出结果
       print(result.stdout.decode())
       appendToFile(result.stdout.decode(), out_filename)
     except subprocess.TimeoutExpired:
