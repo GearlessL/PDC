@@ -247,6 +247,40 @@ bool Graph::outCore(int v){
     return false;
 }
 
+void Graph::prune(int k){
+    int NUM_THREADS = omp_get_num_threads();
+    int chunk_size = (n - kBin[k]) / NUM_THREADS / 2048 + 1;
+#pragma omp parallel for schedule(dynamic, chunk_size)
+    for(int i = kBin[k];i < n; i++){
+        int u = vert[i];
+        changed[u] = true;
+        
+        int cur_id = 0;
+        outTdeg[u] = adj[0][u].size();
+        for(int j = 0; j < outTdeg[u]; j ++){
+            int v = adj[0][u][j];
+            if(iH[v] >= k){
+                adj[0][u][cur_id] = v;
+                cur_id ++;
+            }
+        }
+        adj[0][u].resize(cur_id);
+        outTdeg[u] = cur_id;
+
+        cur_id = 0;
+        inTdeg[u] = adj[1][u].size();
+        for(int j = 0; j < inTdeg[u]; j ++){
+            int v = adj[1][u][j];
+            if(iH[v] >= k){
+                adj[1][u][cur_id] = v;
+                cur_id ++;
+            }
+        }
+        adj[1][u].resize(cur_id);
+        inTdeg[u] = cur_id;
+    }
+}
+
 bool Graph::Refine(int v, int k){
 
     changed[v] = false;
@@ -423,13 +457,27 @@ bool Graph::Refine(int v, int k){
         return true;
 	} 
 
-
-
 	return false;
 
 }
 
-
+void Graph::getInDegree(int k){
+    int NUM_THREADS = omp_get_num_threads();
+    int chunk_size = (n - kBin[k]) / NUM_THREADS / 2048 + 1;
+#pragma omp parallel for schedule(dynamic, chunk_size)
+    for(int i = kBin[k];i < n; i++){
+        int u = vert[i];
+        int cur_id = 0;
+        inTdeg[u] = adj[1][u].size();
+        for(int j = 0; j < inTdeg[u]; j ++){
+            int v = adj[1][u][j];
+            if(OC[v] >= OC[u]){
+                cur_id ++;
+            }
+        }
+        inCdeg[u] = cur_id;
+    }
+}
 
 
 bool Graph::BiSearch(std::vector<int> &NeighborSkyline, int &k, int &l){
@@ -656,20 +704,16 @@ void Graph::ACP(){
 }
 
 //parallel compute (k, 0)-core, dout = deg[0] = 0
-std::vector<int> Graph::pkc(){
+void Graph::pkc(){
     //获取线程数
-    int NUM_THREADS = omp_get_max_threads();
-    // omp_set_num_threads(NUM_THREADS);
-
     int vis_num = 0;
 
-    std::vector<int> Din;
-    Din.resize(n);
+    iH.resize(n);
 #pragma omp for
     for (int i = 0; i < n; i++) {
-        Din[i] = deg[1][i];
+        iH[i] = deg[1][i];
     }
-
+#pragma omp barrier
 
     //每个线程运行这部分代码
 #pragma omp parallel
@@ -690,11 +734,12 @@ std::vector<int> Graph::pkc(){
         #pragma omp for schedule(dynamic,1000)
         for(int i = 0; i < n; i++){
             // printf("dddd.\n");
-            if(Din[i] == level){
+            if(iH[i] == level){
                 buff[end] = i;
                 end++;
             }
         }
+        #pragma omp barrier
 
         //处理buff中的顶点
         while(start < end){
@@ -703,17 +748,17 @@ std::vector<int> Graph::pkc(){
 
             for(int j = 0; j < adj[0][v].size(); j++){
                 int u = adj[0][v][j];
-                int din_u = Din[u];
+                int din_u = iH[u];
 
                 if(din_u > level){
-                    int du = __sync_fetch_and_sub(&Din[u], 1);
+                    int du = __sync_fetch_and_sub(&iH[u], 1);
                     //将下一个level的顶点放在buff末尾
                     if(du==(level+1)){
                         buff[end] = u;
                         end++;
                     }
 
-                    if(du <= level) __sync_fetch_and_add(&Din[u], 1);
+                    if(du <= level) __sync_fetch_and_add(&iH[u], 1);
                 }
 
             }
@@ -730,26 +775,23 @@ std::vector<int> Graph::pkc(){
     }
     free(buff);
 }
-
-    return Din;
-
 }
 
 //parallel compute (l, 0)-core, din = deg[1] = 0
-std::vector<int> Graph::plc(){
-    int NUM_THREADS = omp_get_max_threads();
-
+void Graph::plc(){
+    //获取线程数
     int vis_num = 0;
 
-    std::vector<int> Dout;
-    Dout.resize(n);
+    // std::vector<int> OC;
+    OC.resize(n);
 
 #pragma omp for
     for (int i = 0; i < n; i++) {
-        Dout[i] = deg[0][i];
+        OC[i] = deg[0][i];
     }
+#pragma omp barrier
 
-
+    //每个线程运行这部分代码
 #pragma omp parallel
 {
     int level = 0;
@@ -763,35 +805,40 @@ std::vector<int> Graph::plc(){
 
     while(vis_num < n){
 
+        //获取out-degree为level的顶点
         #pragma omp for schedule(dynamic,1000)
         for(int i = 0; i < n; i++){
-            if(Dout[i] == level){
+            if(OC[i] == level){
                 buff[end] = i;
                 end++;
             }
         }
+        #pragma omp barrier
 
+        //处理buff中的顶点
         while(start < end){
             int v = buff[start];
             start++;
 
             for(int j = 0; j < adj[1][v].size(); j++){
                 int u = adj[1][v][j];
-                int dout_u = Dout[u];
+                int dout_u = OC[u];
 
                 if(dout_u > level){
-                    int du = __sync_fetch_and_sub(&Dout[u], 1);
+                    int du = __sync_fetch_and_sub(&OC[u], 1);
+                    //将下一个level的顶点放在buff末尾
                     if(du==(level+1)){
                         buff[end] = u;
                         end++;
                     }
 
-                    if(du <= level) __sync_fetch_and_add(&Dout[u], 1);
+                    if(du <= level) __sync_fetch_and_add(&OC[u], 1);
                 }
 
             }
         }
 
+        //累计处理过的顶点数
         __sync_fetch_and_add(&vis_num, end);
 
         #pragma omp barrier
@@ -802,26 +849,47 @@ std::vector<int> Graph::plc(){
     }
     free(buff);
 }
-
-    return Dout;
 }
 
 
 void Graph::ACP_plus(){
+    inCdeg = (int *)malloc(n * sizeof(int));
+    outTdeg = (int *)malloc(n * sizeof(int));
+    inTdeg = (int *)malloc(n * sizeof(int));
 
+    for(int i=0;i<n;i++){
+        dmax = dmax > deg[0][i] ? dmax : deg[0][i];
+        dmax = dmax > deg[1][i] ? dmax : deg[1][i];
+    }
 
+    //获取线程数
     int NUM_THREADS = num_of_thread;
     omp_set_num_threads(NUM_THREADS);
 
-
-    auto begin = std::chrono::steady_clock::now();
-
-    OC = plc();
-    iH = pkc();
-
+    auto begin1 = std::chrono::steady_clock::now();
+    pkc();
     auto end1 = std::chrono::steady_clock::now();
-    
 
+    auto begin2 = std::chrono::steady_clock::now();
+    plc();
+    
+    auto end2 = std::chrono::steady_clock::now();
+
+    std::vector<int> num_k_0;
+    std::vector<int> num_0_l;
+
+    for(int i=0;i<n;i++){
+        kmax = kmax > iH[i] ? kmax : iH[i];
+    }
+
+    for(int i=0;i<n;i++){
+        lmax = lmax > OC[i] ? lmax : OC[i];
+    }
+
+    int rowPos = 0;
+    
+// #ifndef NUM_0_l
+    auto begin3 = std::chrono::steady_clock::now();
     //initialize iHk
 #pragma omp parallel for schedule(dynamic,1000)
     for(int i=0;i<n;i++){
@@ -830,13 +898,9 @@ void Graph::ACP_plus(){
         for(int k = 0; k <= kv; k ++)
             iHk1[i].push_back(dout);
     }
-
+    //获取每个kshell中的顶点
     std::vector<int> res;
     auto begin_kshell = std::chrono::steady_clock::now();
-#pragma omp parallel for
-    for(int i = 0; i < changed.size(); i++){
-        changed[i] = false;
-    }
     
     res = kshell(iH);
 
@@ -846,76 +910,90 @@ void Graph::ACP_plus(){
     printf("number of shells: %ld.\n", res.size());
     
     ///////////////////phase 3: refine lupp for each k
-    int num_it = 0;
+    // for(int k = 1; k <= kmax; k++){
     for(int i = 1; i < res.size(); i++){
         int k = res[i];
-        int k_p = res[i-1];
 
-
-#pragma omp parallel for
-        for(int j = kBin[k_p]; j < kBin[k]; j++){                           
-            OC[vert[j]] = 0;
-            changed[vert[j]] = false;
-        }
-
-
-#pragma omp parallel for
-        for(int j = kBin[k];j < vert.size(); j++){
-            changed[vert[j]] = true;
-        }
-
+        // pruning core number小于k的顶点
+        prune(k);
 
         bool flag = true;
-
-        
-
-        auto i_start = std::chrono::steady_clock::now();
-
-        int chunk_size = (vert.size() - kBin[k]) / NUM_THREADS / 16 + 1;
+        //iterate out-core number of all vertices in shellVert
+        int chunk_size = (n - kBin[k]) / NUM_THREADS / 2048 + 1;
         while(flag){
-
+            iterations ++;
             flag = false;
-
+// #pragma omp parallel for
 #pragma omp parallel for schedule(dynamic, chunk_size)
-            for(int j = kBin[k]; j < vert.size(); j++){
+            for(int j = kBin[k]; j < n; j++){
                 int u = vert[j];
-
                 //refine out-core number of u
-                // if(changed[u] && OC[u] != 0){ // add OC[u] != 0 in order to remove unnecessary steps, but it is seemed not worth
                 if(changed[u]){
+                    changed[u] = false;
                     if(Refine(u,k)){
                         flag = true;
-                        // printf("u: %d.\n",u);
                     }
                 }
             }
-            num_it += 1;
         }
 
-        auto i_end = std::chrono::steady_clock::now();
-        double i_runtime = std::chrono::duration<double>(i_end - i_start).count();
+        //将out-core number存储
 
+        rowPos ++;
+
+// find the minimal inner degree from any (k, h)-core with a given
+        getInDegree(k);
+        int mini = adj[1][kBin[k]].size();
+        for(int j = kBin[k]; j < n; j ++){
+            mini = mini < adj[1][j].size()? mini: adj[1][j].size(); 
+        }
         
-
-
-#pragma omp parallel for
-        for(int j = kBin[k]; j < vert.size(); j++){
-            int u = vert[j];
-            iHk1[u][k] = OC[u];
+        flag = false;
+        if(i != res.size() - 1){
+            int beginNum = res[i];
+            int endNum = res[i + 1] - 1;
+            int minRest = endNum;
+            for(int j = kBin[k]; j < n; j ++){
+                int u = vert[j];
+                if(inCdeg[u] >= beginNum && inCdeg[u] < endNum){
+                    if(inCdeg[u] < minRest){
+                        minRest = inCdeg[u];
+                    }
+                    flag = true;
+                }
+            }
+            if(flag == true){
+                res[i] = minRest + 1;
+                i --;
+            }
         }
     }
 
-    auto end2 = std::chrono::steady_clock::now();
+    free(inCdeg);
+    free(outTdeg);
+    free(inTdeg);
+    free(vert);
 
-    double runtime1 = std::chrono::duration<double>(end1 - begin).count();
-    double runtime2 = std::chrono::duration<double>(end2 - end1).count();
-    printf("stage 1 running time: %.4f sec;\n", runtime1);
-    printf("stage kshell running time: %.4f sec;\n", runtime_kshell);
-    printf("stage 2 running time: %.4f sec;\n", runtime2);
+    auto end3 = std::chrono::steady_clock::now();
+
+    double runtime1 = std::chrono::duration<double>(end1 - begin1).count();
+    double runtime2 = std::chrono::duration<double>(end2 - begin2).count();
+    double runtime3 = std::chrono::duration<double>(end3 - begin3).count();
+    // printf("stage 1 running time: %.4f sec, stage 2 running time: %.4lf sec.\n", runtime1, runtime2);
+
+    printf("kmax: %d;\n", kmax);
+    printf("lmax: %d;\n", lmax);
+    printf("dmax: %d;\n", dmax);
+    printf("shell size: %d;\n", res.size());
+    printf("# computing k: %d;\n", rowPos);
+    printf("iterations: %d;\n", iterations);
+
+    printf("stage (k, 0) running time: %.4f sec;\n", runtime1);
+    printf("stage (0, l) running time: %.4f sec;\n", runtime2);
+    printf("stage k list running time: %.4f sec;\n", runtime3);
 
 
     printf("anchored coreness plus+ done.\n");
-
 }
 
 
@@ -1022,7 +1100,8 @@ void Graph::Decom(){
     isInSub.resize(n,true);
     bin.resize(n+1);
     pos.resize(n+1);
-    vert.resize(n);
+    // vert.resize(n);
+    vert = (int *)malloc(n * sizeof(int));
     kBin.resize(n);
     Kdeg.resize(n);
     subLDegree.resize(n);
@@ -1074,17 +1153,78 @@ void Graph::Decom(){
 
     std::vector<int> row = inDependentRows();
 
-
-
-    //for each k, decompose l
-    std::vector<std::vector<int>> Dindex;
-    std::vector<int> sortedID;
-
-    for (auto k : row) {
-        calculate_kl(k);
-        Dindex.push_back(subLDegree);   
+    vector<int> rowVisited;
+    rowVisited.resize(n);
+    for(int i = 0; i < n; i++){
+        rowVisited[i] = 0;
     }
 
+    int rowPos = 0;
+    vector<int> rowsNo;
+    rowsNo.resize(kCoreMax + 1);
+
+    printf("kmax: %d.\n", kCoreMax);
+    printf("number of k-shell: %d.\n", row.size());
+    std::vector<int> kcore_size;
+    std::vector<long> kcore;
+    kcore.resize(kCoreMax + 1);
+    kcore_size.resize(kCoreMax + 1);
+    for(int i = 0; i <= kCoreMax; i++){
+        kcore[i] = 0;
+    }
+
+    for(int i = row.size() - 1; i >= 0; i --){
+        calculate_kl(row[i]);
+        if(rowVisited[row[i]] == 1) continue;
+        rowVisited[row[i]] = 1;
+        rowsNo[rowPos] = row[i];
+        rowPos ++;
+        // printf("row[i] = %d\n", row[i]);
+        for(int l: rowResult){
+            kcore[row[i]] += l;
+        }
+        kcore_size[row[i]] = rowResult.size();
+        
+        int tmpDegree = -1;
+        for(int k = 0; k < rowResult.size(); k++){
+            if(subLDegree[rowResult[k] > tmpDegree]){
+                tmpDegree = subLDegree[rowResult[k]];
+            }
+        }
+
+        if(i != row.size() - 1){
+            bool flag = false;
+            int minRest = row[row.size() - 1];
+            int beginNum = row[i];
+            int endNum = row[i + 1] - 1;
+            for(int l = 0; l < rowResult.size(); l ++){
+                if(subKDegree[rowResult[l]] >= beginNum && subKDegree[rowResult[l]] < endNum){
+                    if(subKDegree[rowResult[l]] < minRest){
+                        minRest = subKDegree[rowResult[l]];
+                    }
+                    flag = true;
+                }
+            }
+            if(flag == true){
+                row[i] = minRest + 1;
+                i ++;
+            }
+        }
+    }
+
+    printf("# iterations = %d\n", rowPos);
+    
+    rowsNo.resize(rowPos);
+    sort(rowsNo.begin(), rowsNo.end());
+
+    for (int i = 0; i < rowPos; i ++){
+        printf("%d, ", rowsNo[i]);
+    }
+    printf("\n");
+
+    free(vert);
+    return;
+    
 }
 
 /**
@@ -1096,7 +1236,7 @@ std::vector<int> Graph::inDependentRows(){
     int record = -1;
     int* result = new int [n];
     int resultPos = 0;
-    for(int i = 0; i< vert.size();i++){
+    for(int i = 0; i< n;i++){
         if(Kdeg[vert[i]] != record){
             result[resultPos] = Kdeg[vert[i]];
             resultPos ++;
@@ -1123,7 +1263,7 @@ std::vector<int> Graph::inDependentRows(){
 void Graph::calculate_kl(int k) {
     rowResultPos = 0;
     rowVert.clear();
-    for(int i=kBin[k];i<vert.size();i++)
+    for(int i=kBin[k];i<n;i++)
         rowVert.push_back(vert[i]);
     // sorted_ID.resize(rowVert.size());
 
@@ -1536,7 +1676,7 @@ void Graph::PDC(){
 //obtain all distinct k
 std::vector<int> Graph::kshell(std::vector<int> Din){
     pos.resize(n+1);
-    vert.resize(n);
+    vert = (int *)malloc(n * sizeof(int));
     kBin.resize(n);
 
     for (int i = 0; i < n; i++) {
@@ -1566,7 +1706,7 @@ std::vector<int> Graph::kshell(std::vector<int> Din){
     int record = -1;
     int* result = new int [n];
     int resultPos = 0;
-    for(int i = 0; i< vert.size();i++){
+    for(int i = 0; i< n;i++){
         if(Din[vert[i]] != record){
             result[resultPos] = Din[vert[i]];
             resultPos ++;
@@ -1696,7 +1836,7 @@ std::vector<int> Graph::Parpeel(int k){
         Din[i] = deg[1][i];        
     }
     
-    for(int i=kBin[k];i<vert.size();i++)
+    for(int i=kBin[k];i<n;i++)
         shellVert.push_back(vert[i]);
 
     for(int i = 0;i<kBin[k];i++){                           
@@ -1704,7 +1844,7 @@ std::vector<int> Graph::Parpeel(int k){
         Dout[vert[i]] = 0;
     }
 
-    for(int i=kBin[k];i<vert.size();i++){
+    for(int i=kBin[k];i<n;i++){
         int v = vert[i];
         for (int l = 0; l < adj[0][v].size(); l++) {
             if (flag[adj[0][v][l]]) Dout[v]--;
@@ -1844,7 +1984,7 @@ std::vector<int> Graph::Parpeel(int k, std::vector<int> upper){
         Din[i] = deg[1][i];        
     }
     
-    for(int i=kBin[k];i<vert.size();i++)
+    for(int i=kBin[k];i<n;i++)
         shellVert.push_back(vert[i]);
 
     int lmax = 0;
@@ -1854,7 +1994,7 @@ std::vector<int> Graph::Parpeel(int k, std::vector<int> upper){
         if(upper[vert[i]]>lmax) lmax = upper[vert[i]];
     }
 
-    for(int i=kBin[k];i<vert.size();i++){
+    for(int i=kBin[k];i<n;i++){
         int v = vert[i];
         for (int l = 0; l < adj[0][v].size(); l++) {
             if (flag[adj[0][v][l]]) Dout[v]--;

@@ -24,6 +24,15 @@ int main(int argc, char *argv[]) {
     int t = a.get<int>("t");
     FILE* dFile = fopen(filepath.c_str(), "r");
 
+    // // // =============================================
+    // string filepath = "./materials/em.txt";
+    // string ds = "em";
+    // FILE* dFile = fopen(filepath.c_str(), "r");
+
+    // int type = 6;
+    // int t = 32;
+    // // // =============================================
+
     printf("file: %s; \t algorithm: %d; \t threads: %d\n", filepath.c_str(), type, t);
 
     clock_t io_begin = clock();
@@ -53,7 +62,6 @@ int main(int argc, char *argv[]) {
         break;
     case 4:
         printf("done.\n");
-
         g.PDC_org();
         break;
     case 5:
