@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
         break;
     case 6:
         printf("done.\n");
-        g.ACP_plus();
+        g.Shell_PDC();
         break;
     default:
         printf("no such algorithm.\n");
