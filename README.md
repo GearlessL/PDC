@@ -7,6 +7,7 @@
 * Shell-PDC: our proposed parallel D-core decomposition algorithm, listed in Algorithm 5.
 
 *[1] Yixiang Fang, Zhongran Wang, Reynold Cheng, Hongzhi Wang, Jiafeng Hu. Effective and Efficient Community Search over Large Directed Graphs. IEEE Transactions on Knowledge and Data Engineering (TKDE), 31(11): 2093-2107, 2019.*
+
 *[2] Xuankun Liao, Qing Liu, Jiaxin Jiang, Xin Huang, Jianliang Xu, Byron Choi. Distributed D-core decomposition over large directed graphs. Proceedings of the VLDB Endowment, 15(8): 1546–1558, 2022.*
 
 # Compiling and Running
