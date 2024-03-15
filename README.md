@@ -125,4 +125,4 @@ The ID of the algorithm to be executed is presented as follows.
     </table>
 </div>
 
-* We give an example of Email-EuAll in ```./materials/```, and running time of all algorithms in ```./result/EM/```.
+* An example of the Email-EuAll dataset is provided in ```./materials/```, and the running time of all algorithms can be found in ```./result/EM/```.
