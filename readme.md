@@ -3,8 +3,10 @@
 * AC: the distributed anchored coreness-based D-core decomposition algorithm, and we parallelize it by using multi-threads;
 * SC: the state-of-the-art distributed skyline coreness-based D-core decomposition algorithm, and we parallelize it by using multi-threads;
 * ParPeel: our proposed parallel D-core decomposition algorithm, which is depicted in Algorithm 3;
-* ParPeel+: our proposed parallel D-core decomposition algorithm in Algorithm 3 with shell-based pruning strategy in Section 5.1;
+* ParPeel-Prune: our proposed parallel D-core decomposition algorithm in Algorithm 3 with pruning strategy in Lemma 3 of [1];
 * Shell-PDC: our proposed parallel D-core decomposition algorithm, listed in Algorithm 5.
+
+* [1] Yixiang Fang, Zhongran Wang, Reynold Cheng, Hongzhi Wang, Jiafeng Hu. Effective and Efficient Community Search over Large Directed Graphs. IEEE Transactions on Knowledge and Data Engineering (TKDE), 31(11): 2093-2107, 2019.
 
 
 # Compiling and Running
@@ -61,7 +63,7 @@ The id of algorithm will be running, which the id is presented as following.
 | 2 | AC |
 | 3 | SC |
 | 4 | ParPeel |
-| 5 | ParPeel+ |
+| 5 | ParPeel-Prune |
 | 6 | Fast-PDC |
 
 # Other
