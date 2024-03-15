@@ -33,7 +33,7 @@ For example:
 -a 6 
 ```
 
-For simply, we can run the program via a script ```./run.py```.
+For simplicity, the program can be executed using a script named ```./run.py```.
 
 
 
@@ -43,20 +43,20 @@ For simply, we can run the program via a script ```./run.py```.
 The number of threads.
 
 * GRAPH_FILE:
-The first line consists of # of nodes and # of directed edges in the graph, which is denoted as follows.
+The first line contains the number of nodes and the number of directed edges in the graph, formatted as follows.
 ```
 ${NODES} ${EDGE}
 ``` 
-Remains line represents a directed edge from node u to node v, which is presented as follows.
+Each subsequent line represents a directed edge from node $u$ to node $v$, formatted as follows.
 ```
 ${u} ${v}
 ```
 
 
 * ALGORITHM:
-The id of the algorithm will be running, and the id is presented as follows.
+The ID of the algorithm to be executed is presented as follows.
 
-| id | algorithms |
+| ID | Algorithms |
 | :----: | :----: |
 | 1 | Peeling |
 | 2 | AC |
