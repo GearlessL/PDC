@@ -653,6 +653,154 @@ void Graph::AC(){
 
 }
 
+//parallel compute (k, 0)-core, dout = deg[0] = 0
+void Graph::pkc(){
+    //获取线程数
+    int vis_num = 0;
+
+    iH.resize(n);
+#pragma omp for
+    for (int i = 0; i < n; i++) {
+        iH[i] = deg[1][i];
+    }
+#pragma omp barrier
+
+    //每个线程运行这部分代码
+#pragma omp parallel
+{
+    int level = 0;
+
+    // long buff_size = n/NUM_THREADS + 1;
+    long buff_size = n;
+
+    int *buff = (int *)malloc(buff_size*sizeof(int));
+    assert(buff != NULL);
+    
+    int start = 0, end = 0;
+
+    while(vis_num < n){
+
+        //获取in-degree为level的顶点
+        #pragma omp for schedule(dynamic,1000)
+        for(int i = 0; i < n; i++){
+            // printf("dddd.\n");
+            if(iH[i] == level){
+                buff[end] = i;
+                end++;
+            }
+        }
+        #pragma omp barrier
+
+        //处理buff中的顶点
+        while(start < end){
+            int v = buff[start];
+            start++;
+
+            for(int j = 0; j < adj[0][v].size(); j++){
+                int u = adj[0][v][j];
+                int din_u = iH[u];
+
+                if(din_u > level){
+                    int du = __sync_fetch_and_sub(&iH[u], 1);
+                    //将下一个level的顶点放在buff末尾
+                    if(du==(level+1)){
+                        buff[end] = u;
+                        end++;
+                    }
+
+                    if(du <= level) __sync_fetch_and_add(&iH[u], 1);
+                }
+
+            }
+        }
+
+        //累计处理过的顶点数
+        __sync_fetch_and_add(&vis_num, end);
+
+        #pragma omp barrier
+        start = 0;
+        end = 0;
+        level = level+1;
+
+    }
+    free(buff);
+}
+}
+
+//parallel compute (l, 0)-core, din = deg[1] = 0
+void Graph::plc(){
+    //获取线程数
+    int vis_num = 0;
+
+    // std::vector<int> OC;
+    OC.resize(n);
+
+#pragma omp for
+    for (int i = 0; i < n; i++) {
+        OC[i] = deg[0][i];
+    }
+#pragma omp barrier
+
+    //每个线程运行这部分代码
+#pragma omp parallel
+{
+    int level = 0;
+
+    long buff_size = n;
+
+    int *buff = (int *)malloc(buff_size*sizeof(int));
+    assert(buff != NULL);
+    
+    int start = 0, end = 0;
+
+    while(vis_num < n){
+
+        //获取out-degree为level的顶点
+        #pragma omp for schedule(dynamic,1000)
+        for(int i = 0; i < n; i++){
+            if(OC[i] == level){
+                buff[end] = i;
+                end++;
+            }
+        }
+        #pragma omp barrier
+
+        //处理buff中的顶点
+        while(start < end){
+            int v = buff[start];
+            start++;
+
+            for(int j = 0; j < adj[1][v].size(); j++){
+                int u = adj[1][v][j];
+                int dout_u = OC[u];
+
+                if(dout_u > level){
+                    int du = __sync_fetch_and_sub(&OC[u], 1);
+                    //将下一个level的顶点放在buff末尾
+                    if(du==(level+1)){
+                        buff[end] = u;
+                        end++;
+                    }
+
+                    if(du <= level) __sync_fetch_and_add(&OC[u], 1);
+                }
+
+            }
+        }
+
+        //累计处理过的顶点数
+        __sync_fetch_and_add(&vis_num, end);
+
+        #pragma omp barrier
+        start = 0;
+        end = 0;
+        level = level+1;
+
+    }
+    free(buff);
+}
+}
+
 
 void Graph::Shell_PDC(){
     inCdeg = (int *)malloc(n * sizeof(int));
